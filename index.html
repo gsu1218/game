@@ -123,6 +123,39 @@
       color: #f3f4f6;
       font-weight: 600;
     }
+
+    /* 모바일 가상 컨트롤 패드 스타일 */
+    #mobile-controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+      width: 280px;
+    }
+    .touch-btn {
+      background: #374151;
+      border: 2px solid #4b5563;
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: bold;
+      border-radius: 12px;
+      padding: 14px 0;
+      text-align: center;
+      touch-action: manipulation;
+      user-select: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      transition: background 0.1s, transform 0.1s;
+    }
+    .touch-btn:active {
+      background: #10b981;
+      border-color: #059669;
+      transform: scale(0.95);
+    }
+    .btn-up { grid-column: 2; grid-row: 1; }
+    .btn-left { grid-column: 1; grid-row: 2; }
+    .btn-down { grid-column: 2; grid-row: 2; }
+    .btn-right { grid-column: 3; grid-row: 2; }
   </style>
 </head>
 <body>
@@ -142,8 +175,16 @@
     </div>
   </div>
 
+  <!-- 모바일 및 터치 조작 패드 -->
+  <div id="mobile-controls">
+    <button class="touch-btn btn-up" onclick="movePlayer('up')">▲</button>
+    <button class="touch-btn btn-left" onclick="movePlayer('left')">◄</button>
+    <button class="touch-btn btn-down" onclick="movePlayer('down')">▼</button>
+    <button class="touch-btn btn-right" onclick="movePlayer('right')">►</button>
+  </div>
+
   <div id="controls-guide">
-    조작 방법: <span class="key">◄</span> 전진 (왼쪽) | <span class="key">►</span> 후진 (오른쪽) | <span class="key">▲</span><span class="key">▼</span> 위/아래 이동
+    조작 방법: <span class="key">◄</span> 전진 | <span class="key">►</span> 후진 | <span class="key">▲</span><span class="key">▼</span> 위/아래 이동 (화면 버튼 터치 가능)
   </div>
 
   <script>
@@ -183,6 +224,13 @@
     const healParticles = [];
 
     const lanes = [];
+
+    // 플레이어 단계 레벨 구하기 (0: 병아리, 1: 중닭, 2: 어른닭)
+    function getPlayerStage() {
+      if (maxLaneIndex >= 50) return 2; // 어른닭
+      if (maxLaneIndex >= 30) return 1; // 중닭
+      return 0; // 병아리
+    }
 
     function getLane(index) {
       let lane = lanes.find(l => l.index === index);
@@ -386,11 +434,12 @@
       }
     }
 
-    window.addEventListener('keydown', (e) => {
+    // 방향 이동 통합 함수 (키보드 및 터치 지원)
+    function movePlayer(dir) {
       if (isGameOver || player.isHealing || player.moveCooldown > 0) return;
 
-      switch (e.key) {
-        case 'ArrowLeft':
+      switch (dir) {
+        case 'left':
           player.gridX -= 1;
           const currentProgress = Math.abs(player.gridX);
           if (currentProgress > maxLaneIndex) {
@@ -398,12 +447,11 @@
             score = maxLaneIndex;
             scoreEl.textContent = score;
           }
-          // 무적 상태 시 연타로 멀리 나아가는 것을 방지하기 위해 이동 간 격차 할당
           if (player.invincibleTimer > 0) {
             player.moveCooldown = 0.15;
           }
           break;
-        case 'ArrowRight':
+        case 'right':
           if (player.gridX < 0) {
             player.gridX += 1;
             if (player.invincibleTimer > 0) {
@@ -411,10 +459,10 @@
             }
           }
           break;
-        case 'ArrowUp':
+        case 'up':
           player.y = Math.max(12, player.y - 26);
           break;
-        case 'ArrowDown':
+        case 'down':
           player.y = Math.min(CANVAS_HEIGHT - 40, player.y + 26);
           break;
       }
@@ -422,7 +470,31 @@
       for (let i = player.gridX - 10; i <= player.gridX + 2; i++) {
         getLane(i);
       }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowLeft':
+          movePlayer('left');
+          break;
+        case 'ArrowRight':
+          movePlayer('right');
+          break;
+        case 'ArrowUp':
+          movePlayer('up');
+          break;
+        case 'ArrowDown':
+          movePlayer('down');
+          break;
+      }
     });
+
+    // 캐릭터 진화 단계 계산 함수
+    function getEvolutionStage(score) {
+      if (score >= 50) return 3; // 어른닭 (50차선 이상)
+      if (score >= 30) return 2; // 중닭 (30차선 이상)
+      return 1;                  // 병아리 (0~29차선)
+    }
 
     function render() {
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -500,6 +572,13 @@
       ctx.save();
       ctx.translate(playerX + player.width / 2, player.y + player.height / 2);
 
+      // 진화 단계 구하기 (0: 병아리, 1: 중닭, 2: 어른닭)
+      const stage = getPlayerStage();
+      
+      // 단계별 크기 스케일 (병아리: 1.0, 중닭: 1.3, 어른닭: 1.6)
+      const scale = stage === 2 ? 1.6 : (stage === 1 ? 1.3 : 1.0);
+      ctx.scale(scale, scale);
+
       if (player.isHealing) {
         // 구급차에 치여 치료받는 중 (어지러운 X X 눈으로 회전하며 치료됨)
         const progress = 1 - (player.healTimer / 1.2); // 0 -> 1 진행
@@ -508,29 +587,27 @@
         const rotation = (1 - progress) * Math.PI * 2 + (Math.PI / 2);
         ctx.rotate(rotation);
 
-        ctx.fillStyle = '#f59e0b';
+        ctx.fillStyle = stage === 2 ? '#d97706' : '#f59e0b';
         ctx.beginPath();
         ctx.arc(0, 0, 14, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#d97706';
+        ctx.fillStyle = '#b45309';
         ctx.beginPath();
         ctx.moveTo(-12, -4);
         ctx.lineTo(-18, 0);
         ctx.lineTo(-12, 4);
         ctx.fill();
 
-        // 어지러워서 'X X' 눈 모션 (기존 스타일 복원)
+        // 어지러워서 'X X' 눈 모션
         ctx.strokeStyle = '#1f2937';
         ctx.lineWidth = 2;
 
-        // 왼쪽 X 눈
         ctx.beginPath();
         ctx.moveTo(-7, -7); ctx.lineTo(-3, -3);
         ctx.moveTo(-3, -7); ctx.lineTo(-7, -3);
         ctx.stroke();
 
-        // 오른쪽 X 눈
         ctx.beginPath();
         ctx.moveTo(1, -7); ctx.lineTo(5, -3);
         ctx.moveTo(5, -7); ctx.lineTo(1, -3);
@@ -539,12 +616,12 @@
       } else if (player.isDead) {
         ctx.rotate(Math.PI / 2);
         
-        ctx.fillStyle = '#f59e0b';
+        ctx.fillStyle = stage === 2 ? '#d97706' : '#f59e0b';
         ctx.beginPath();
         ctx.arc(0, 0, 14, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#d97706';
+        ctx.fillStyle = '#b45309';
         ctx.fillRect(8, -3, 6, 6);
 
         ctx.strokeStyle = '#1f2937';
@@ -565,27 +642,125 @@
           ctx.globalAlpha = 0.5;
         }
 
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
-        ctx.fill();
+        const stage = getEvolutionStage(score);
 
-        ctx.fillStyle = '#d97706';
-        ctx.beginPath();
-        ctx.moveTo(-12, -4);
-        ctx.lineTo(-18, 0);
-        ctx.lineTo(-12, 4);
-        ctx.fill();
+        if (stage === 1) {
+          // [1단계: 병아리]
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 14, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.fillStyle = '#111827';
-        ctx.beginPath();
-        ctx.arc(-4, -4, 2.5, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.moveTo(-12, -4);
+          ctx.lineTo(-18, 0);
+          ctx.lineTo(-12, 4);
+          ctx.fill();
 
-        ctx.fillStyle = '#f43f5e';
-        ctx.beginPath();
-        ctx.arc(-2, 2, 3, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.fillStyle = '#111827';
+          ctx.beginPath();
+          ctx.arc(-4, -4, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#f43f5e';
+          ctx.beginPath();
+          ctx.arc(-2, 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else if (stage === 2) {
+          // [2단계: 중닭 (30차선~)] - 스케일업 & 약간의 벼슬 및 날개 추가
+          ctx.scale(1.25, 1.25);
+
+          // 작은 붉은 벼슬
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(0, -14, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 몸통
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 날개 표현
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.ellipse(3, 4, 6, 9, Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 부리
+          ctx.fillStyle = '#ea580c';
+          ctx.beginPath();
+          ctx.moveTo(-12, -3);
+          ctx.lineTo(-18, 1);
+          ctx.lineTo(-12, 5);
+          ctx.fill();
+
+          // 눈
+          ctx.fillStyle = '#111827';
+          ctx.beginPath();
+          ctx.arc(-4, -4, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 볼 터치
+          ctx.fillStyle = '#f43f5e';
+          ctx.beginPath();
+          ctx.arc(-2, 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else {
+          // [3단계: 어른닭 (50차선~)] - 선명하고 커다란 수탉
+          ctx.scale(1.5, 1.5);
+
+          // 꼬리 깃털
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(12, -4, 7, 0, Math.PI * 2);
+          ctx.arc(15, 2, 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 커다란 선명한 벼슬 (3개 원)
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(-4, -15, 4, 0, Math.PI * 2);
+          ctx.arc(1, -16, 5, 0, Math.PI * 2);
+          ctx.arc(6, -14, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 몸통
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 큰 날개
+          ctx.fillStyle = '#b45309';
+          ctx.beginPath();
+          ctx.ellipse(2, 4, 7, 10, Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 늠름한 부리
+          ctx.fillStyle = '#ea580c';
+          ctx.beginPath();
+          ctx.moveTo(-12, -4);
+          ctx.lineTo(-20, 1);
+          ctx.lineTo(-12, 6);
+          ctx.fill();
+
+          // 부리 밑 턱벼슬 (wattle)
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(-11, 8, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 눈
+          ctx.fillStyle = '#111827';
+          ctx.beginPath();
+          ctx.arc(-4, -4, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       ctx.restore();
