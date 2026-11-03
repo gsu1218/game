@@ -175,7 +175,8 @@
       isDead: false,
       isHealing: false,
       healTimer: 0,
-      invincibleTimer: 0
+      invincibleTimer: 0,
+      moveCooldown: 0 // 무적/부활 직후 둔화 및 이동 쿨다운
     };
 
     // 힐링 파티클 (+ 문양) 배열
@@ -282,10 +283,15 @@
 
         if (player.healTimer <= 0) {
           player.isHealing = false;
-          player.invincibleTimer = 1.5; // 일어난 후 1.5초 무적
+          player.invincibleTimer = 0.6; // 무적 시간 0.6초로 단축
+          player.moveCooldown = 0.3; // 일어난 직후 0.3초간 이동 속도 조절
         }
       } else if (player.invincibleTimer > 0) {
         player.invincibleTimer -= 0.016;
+      }
+
+      if (player.moveCooldown > 0) {
+        player.moveCooldown -= 0.016;
       }
 
       // 파티클 위치 업데이트 및 라이프 타임 차감
@@ -381,7 +387,7 @@
     }
 
     window.addEventListener('keydown', (e) => {
-      if (isGameOver || player.isHealing) return;
+      if (isGameOver || player.isHealing || player.moveCooldown > 0) return;
 
       switch (e.key) {
         case 'ArrowLeft':
@@ -392,10 +398,17 @@
             score = maxLaneIndex;
             scoreEl.textContent = score;
           }
+          // 무적 상태 시 연타로 멀리 나아가는 것을 방지하기 위해 이동 간 격차 할당
+          if (player.invincibleTimer > 0) {
+            player.moveCooldown = 0.15;
+          }
           break;
         case 'ArrowRight':
           if (player.gridX < 0) {
             player.gridX += 1;
+            if (player.invincibleTimer > 0) {
+              player.moveCooldown = 0.15;
+            }
           }
           break;
         case 'ArrowUp':
